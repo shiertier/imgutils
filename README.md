@@ -9,6 +9,7 @@
 [![Package Release](https://github.com/deepghs/imgutils/workflows/Package%20Release/badge.svg)](https://github.com/deepghs/imgutils/actions?query=workflow%3A%22Package+Release%22)
 [![codecov](https://codecov.io/gh/deepghs/imgutils/branch/main/graph/badge.svg?token=XJVDP4EFAT)](https://codecov.io/gh/deepghs/imgutils)
 
+[![Discord](https://img.shields.io/discord/1157587327879745558?style=social&logo=discord&link=https%3A%2F%2Fdiscord.gg%2FTwdHJ42N72)](https://discord.gg/TwdHJ42N72)
 ![GitHub Org's stars](https://img.shields.io/github/stars/deepghs)
 [![GitHub stars](https://img.shields.io/github/stars/deepghs/imgutils)](https://github.com/deepghs/imgutils/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/deepghs/imgutils)](https://github.com/deepghs/imgutils/network)
@@ -46,7 +47,6 @@ to [Installation](https://deepghs.github.io/imgutils/main/tutorials/installation
 * [Object Detection](https://github.com/deepghs/imgutils#object-detection)
 * [Edge Detection / Lineart Generation](https://github.com/deepghs/imgutils#edge-detection--lineart-generation)
 * [Monochrome Image Detection](https://github.com/deepghs/imgutils#monochrome-image-detection)
-* [Image Rating](https://github.com/deepghs/imgutils#image-rating)
 * [Truncated Image Check](https://github.com/deepghs/imgutils#truncated-image-check)
 * [Image Tagging](https://github.com/deepghs/imgutils#image-tagging)
 * [Character Extraction](https://github.com/deepghs/imgutils#character-extraction)
@@ -176,30 +176,6 @@ print(is_monochrome('colored/12.jpg'))
 For more details, please refer to
 the [official documentation](https://deepghs.github.io/imgutils/main/api_doc/validate/monochrome.html#module-imgutils.validate.monochrome)
 .
-
-### Image Rating
-
-We can use `imgutils` to perform a rough and quick determination of the rating (`safe`, `r15`, or `r18`) of anime
-images, as shown below.
-
-![rating](https://github.com/deepghs/imgutils/blob/gh-pages/main/_images/rating.plot.py.svg)
-
-```python
-from imgutils.validate import anime_rating
-
-print(anime_rating('rating/safe/1.jpg'))  # ('safe', 0.9999998807907104)
-print(anime_rating('rating/safe/2.jpg'))  # ('safe', 0.9924363493919373)
-print(anime_rating('rating/safe/3.jpg'))  # ('safe', 0.996969997882843)
-print(anime_rating('rating/safe/4.jpg'))  # ('safe', 0.9966891407966614)
-print(anime_rating('rating/r15/5.jpg'))  # ('r15', 0.9996721744537354)
-print(anime_rating('rating/r15/6.jpg'))  # ('r15', 0.9998563528060913)
-print(anime_rating('rating/r15/7.jpg'))  # ('r15', 0.9827859997749329)
-print(anime_rating('rating/r15/8.jpg'))  # ('r15', 0.8339558839797974)
-print(anime_rating('rating/r18/9.jpg'))  # ('r18', 0.9997004270553589)
-print(anime_rating('rating/r18/10.jpg'))  # ('r18', 0.9997699856758118)
-print(anime_rating('rating/r18/11.jpg'))  # ('r18', 0.9999485015869141)
-print(anime_rating('rating/r18/12.jpg'))  # ('r18', 0.9994290471076965)
-```
 
 ### Truncated Image Check
 

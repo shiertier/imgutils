@@ -4,19 +4,19 @@ Overview:
     `SmilingWolf/wd-v1-4-tags <https://huggingface.co/spaces/SmilingWolf/wd-v1-4-tags>`_ .
 """
 from functools import lru_cache
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
-import huggingface_hub
 import numpy as np
 import onnxruntime
 import pandas as pd
 from PIL import Image
 from hbutils.testing.requires.version import VersionInfo
+from huggingface_hub import hf_hub_download
 
 from .format import remove_underline
 from .overlap import drop_overlap_tags
-from ..data import load_image, ImageTyping
-from ..utils import open_onnx_model
+from ..data import load_image, ImageTyping, has_alpha_channel
+from ..utils import open_onnx_model, vreplace
 
 SWIN_MODEL_REPO = "SmilingWolf/wd-v1-4-swinv2-tagger-v2"
 CONV_MODEL_REPO = "SmilingWolf/wd-v1-4-convnext-tagger-v2"
@@ -26,12 +26,17 @@ MOAT_MODEL_REPO = "SmilingWolf/wd-v1-4-moat-tagger-v2"
 CONV_V3_MODEL_REPO = 'SmilingWolf/wd-convnext-tagger-v3'
 SWIN_V3_MODEL_REPO = 'SmilingWolf/wd-swinv2-tagger-v3'
 VIT_V3_MODEL_REPO = 'SmilingWolf/wd-vit-tagger-v3'
+VIT_LARGE_MODEL_REPO = 'SmilingWolf/wd-vit-large-tagger-v3'
+EVA02_LARGE_MODEL_DSV3_REPO = "SmilingWolf/wd-eva02-large-tagger-v3"
 MODEL_FILENAME = "model.onnx"
 LABEL_FILENAME = "selected_tags.csv"
 
 _IS_V3_SUPPORT = VersionInfo(onnxruntime.__version__) >= '1.17'
 
 MODEL_NAMES = {
+    "EVA02_Large": EVA02_LARGE_MODEL_DSV3_REPO,
+    "ViT_Large": VIT_LARGE_MODEL_REPO,
+
     "SwinV2": SWIN_MODEL_REPO,
     "ConvNext": CONV_MODEL_REPO,
     "ConvNextV2": CONV2_MODEL_REPO,
@@ -64,7 +69,10 @@ def _get_wd14_model(model_name):
     :rtype: ONNXModel
     """
     _version_support_check(model_name)
-    return open_onnx_model(huggingface_hub.hf_hub_download(MODEL_NAMES[model_name], MODEL_FILENAME))
+    return open_onnx_model(hf_hub_download(
+        repo_id='deepghs/wd14_tagger_with_embeddings',
+        filename=f'{MODEL_NAMES[model_name]}/model.onnx',
+    ))
 
 
 @lru_cache()
@@ -79,7 +87,7 @@ def _get_wd14_labels(model_name, no_underline: bool = False) -> Tuple[List[str],
     :return: A tuple containing the list of tag names, and lists of indexes for rating, general, and character categories.
     :rtype: Tuple[List[str], List[int], List[int], List[int]]
     """
-    path = huggingface_hub.hf_hub_download(MODEL_NAMES[model_name], LABEL_FILENAME)
+    path = hf_hub_download(MODEL_NAMES[model_name], LABEL_FILENAME)
     df = pd.read_csv(path)
     name_series = df["name"]
     if no_underline:
@@ -107,14 +115,17 @@ def _mcut_threshold(probs) -> float:
 
 
 def _prepare_image_for_tagging(image: ImageTyping, target_size: int):
-    image = load_image(image, force_background='white', mode='RGB')
+    image = load_image(image, force_background=None, mode=None)
     image_shape = image.size
     max_dim = max(image_shape)
     pad_left = (max_dim - image_shape[0]) // 2
     pad_top = (max_dim - image_shape[1]) // 2
 
     padded_image = Image.new("RGB", (max_dim, max_dim), (255, 255, 255))
-    padded_image.paste(image, (pad_left, pad_top))
+    try:
+        padded_image.paste(image, (pad_left, pad_top), mask=image)
+    except ValueError:
+        padded_image.paste(image, (pad_left, pad_top))
 
     if max_dim != target_size:
         padded_image = padded_image.resize((target_size, target_size), Image.BICUBIC)
@@ -133,6 +144,7 @@ def get_wd14_tags(
         character_mcut_enabled: bool = False,
         no_underline: bool = False,
         drop_overlap: bool = False,
+        fmt=('rating', 'general', 'character'),
 ):
     """
     Overview:
@@ -155,8 +167,21 @@ def get_wd14_tags(
     :type no_underline: bool
     :param drop_overlap: If True, drops overlapping tags.
     :type drop_overlap: bool
+    :param fmt: Return format, default is ``('rating', 'general', 'character')``.
+        ``embedding`` is also supported for feature extraction.
+    :type fmt: Any
     :return: A tuple containing dictionaries for rating, general, and character tags with their probabilities.
     :rtype: Tuple[Dict[str, float], Dict[str, float], Dict[str, float]]
+
+    .. note::
+        About ``fmt`` argument, these are the available names:
+
+        * ``rating``, a dict containing ratings and their confidences
+        * ``general``, a dict containing general tags and their confidences
+        * ``character``, a dict containing character tags and their confidences
+        * ``tag``, a dict containing all tags (including general and character, not including rating) and their confidences
+        * ``embedding``, a 1-dim embedding of image, recommended for index building after L2 normalization
+        * ``prediction``, a 1-dim prediction result of image
 
     Example:
         Here are some images for example
@@ -189,20 +214,20 @@ def get_wd14_tags(
     image = _prepare_image_for_tagging(image, target_size)
 
     input_name = model.get_inputs()[0].name
+    assert len(model.get_outputs()) == 2
     label_name = model.get_outputs()[0].name
-    preds = model.run([label_name], {input_name: image})[0]
+    emb_name = model.get_outputs()[1].name
+    preds, embeddings = model.run([label_name, emb_name], {input_name: image})
     labels = list(zip(tag_names, preds[0].astype(float)))
 
-    ratings_names = [labels[i] for i in rating_indexes]
-    rating = dict(ratings_names)
+    rating = {labels[i][0]: labels[i][1].item() for i in rating_indexes}
 
     general_names = [labels[i] for i in general_indexes]
     if general_mcut_enabled:
         general_probs = np.array([x[1] for x in general_names])
         general_threshold = _mcut_threshold(general_probs)
 
-    general_res = [x for x in general_names if x[1] > general_threshold]
-    general_res = dict(general_res)
+    general_res = {x: v.item() for x, v in general_names if v > general_threshold}
     if drop_overlap:
         general_res = drop_overlap_tags(general_res)
 
@@ -212,7 +237,16 @@ def get_wd14_tags(
         character_threshold = _mcut_threshold(character_probs)
         character_threshold = max(0.15, character_threshold)
 
-    character_res = [x for x in character_names if x[1] > character_threshold]
-    character_res = dict(character_res)
+    character_res = {x: v.item() for x, v in character_names if v > character_threshold}
 
-    return rating, general_res, character_res
+    return vreplace(
+        fmt,
+        {
+            'rating': rating,
+            'general': general_res,
+            'character': character_res,
+            'tag': {**general_res, **character_res},
+            'embedding': embeddings[0].astype(np.float32),
+            'prediction': preds[0].astype(np.float32),
+        }
+    )

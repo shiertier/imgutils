@@ -33,14 +33,18 @@ configuration file's structure and their versions.
     api_doc/data/index
     api_doc/detect/index
     api_doc/edge/index
+    api_doc/generic/index
+    api_doc/metadata/index
     api_doc/metrics/index
     api_doc/ocr/index
     api_doc/operate/index
     api_doc/pose/index
+    api_doc/resource/index
     api_doc/restore/index
     api_doc/sd/index
     api_doc/segment/index
     api_doc/tagging/index
+    api_doc/upscale/index
     api_doc/utils/index
     api_doc/validate/index
 
